@@ -1,0 +1,551 @@
+\documentclass{ieeeaccess}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{array}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\newcommand{\Punrec}{P_{\mathrm{unrec}}}
+\newcommand{\Mrec}{M_{\mathrm{rec}}}
+% Page-wide figure captions: ieeeaccess.cls sets them in a one-line tabular, so wrap the text explicitly.
+\newcommand{\widecap}[1]{\parbox[t]{0.89\textwidth}{\raggedright #1}}
+\begin{document}
+\history{Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
+\doi{10.1109/ACCESS.2026.DOI}
+
+\title{Forecast-Aware Recoverability Shielding for Emergency Medical UAV Navigation in Stochastic Urban Floods}
+
+% TODO: replace the placeholders below with the real author names, affiliations and e-mail addresses.
+\author{\uppercase{First Author}\authorrefmark{1},
+\uppercase{Second Author}\authorrefmark{1}, and \uppercase{Third Author}\authorrefmark{2}}
+\address[1]{Department of Computer Science and Engineering, University Name, City, Country (e-mail: first.author@university.edu)}
+\address[2]{Department of Computer Science and Engineering, University Name, City, Country (e-mail: third.author@university.edu)}
+\tfootnote{This work did not receive external funding.}
+
+\markboth
+{Author \headeretal: Forecast-Aware Recoverability Shielding for Emergency Medical UAV Navigation}
+{Author \headeretal: Forecast-Aware Recoverability Shielding for Emergency Medical UAV Navigation}
+
+\corresp{Corresponding author: First Author (e-mail: first.author@university.edu).}
+
+\begin{abstract}
+Drones that carry emergency medical supplies through flooding cities must decide not only whether the next move is safe, but whether it keeps the whole mission recoverable: delivery before a deadline with an intact payload, followed by a safe landing with the remaining battery. We study this question in a reproducible stochastic simulator of urban flooding with correlated wind, rainfall, flood spread, payload stability and probabilistic flood forecasts. A recurrent reinforcement-learning policy, initialized from a privileged planning teacher and fine-tuned with proximal policy optimization, proposes actions. A safety layer then samples many plausible futures that are consistent with the forecast, runs an exact time-expanded search in each one, and accepts an action only if its estimated probability of becoming unrecoverable is small; otherwise it returns home or lands on a rooftop. Before learning, the simulator's rainfall and wind processes are checked against three monsoon seasons of hourly reanalysis data for Mumbai, and calibrated alternatives are derived where the original processes fail. Across 1100 paired held-out missions spanning eleven stress scenarios, the recoverability layer reduces vehicle losses from 31.1\% to 6.1\% compared with a conventional one-step safety filter, cuts failures that slip past one-step checks from 27.1\% to 7.9\%, and slightly increases missions that are both delivered and recoverable. Code, data and an interactive demonstration are released.
+\end{abstract}
+
+\begin{keywords}
+Disaster response, emergency medical delivery, flood forecasting, Monte Carlo methods, proximal policy optimization, reinforcement learning, safe reinforcement learning, unmanned aerial vehicles
+\end{keywords}
+
+\titlepgskip=-15pt
+
+\maketitle
+
+%=====================================================================
+\section{Introduction}
+\label{sec:introduction}
+\PARstart{U}{nmanned} aerial vehicles (UAVs) already deliver blood and medicines to remote clinics \cite{ackerman2019}, and they are an attractive tool when floods cut road access in a city. Flood response is, however, exactly the situation in which flight conditions change fastest: water spreads, rain intensifies, gusts disturb fragile payloads, and the information available to the vehicle is partial and probabilistic. A navigation policy for this task must therefore reason about more than the next move.
+
+Most safe reinforcement-learning (RL) approaches enforce \emph{immediate} constraints. A shield or action filter rejects actions that would cause a collision or violate a resource limit in the next step \cite{alshiekh2018,garcia2015}. Such filters are necessary but not sufficient. An action that is safe now may commit the UAV to a corridor that floods a few minutes later, or may consume time and energy so that the delivery deadline or the return flight becomes impossible. We call this property \emph{recoverability}: after taking an action, does there still exist a way to deliver the payload on time, with acceptable payload integrity, and then reach a safe landing site with a battery reserve? Recoverability is closely related to viability \cite{aubin1991} and to reachability-based safety frameworks \cite{fisac2019}. Here we estimate it under a probabilistic flood forecast rather than a worst-case model.
+
+This paper asks one research question: \emph{can forecast-conditioned, action-level recoverability checks reduce future mission failures while preserving on-time delivery, compared with policies that only check immediate feasibility?} To answer it we make the following contributions.
+\begin{enumerate}
+\item A reproducible Gymnasium simulator \cite{towers2024} for single-UAV emergency delivery in a flooding city. It combines stochastic wind, rainfall, a flood cellular automaton, payload stability, battery, deadline and a probabilistic flood forecast under partial observability. All model equations were audited against the original implementation and are reproduced exactly.
+\item An empirical validation of the simulator's rainfall and wind processes against ERA5 reanalysis \cite{hersbach2020}. It identifies which properties the original processes reproduce, and introduces calibrated alternatives (a two-timescale latent-Gaussian rainfall model and a diurnal vector-autoregressive wind model) that match 14 of 14 and 17 of 18 held-out statistics.
+\item A forecast consequence evaluator. It samples monotone flood futures that reproduce the forecast's marginal probabilities exactly, runs an exact time-expanded minimum-energy search in each future, and estimates the probability that an action makes the mission unrecoverable.
+\item A graded recoverability shield with confirmation sampling and an emergency fallback, whose thresholds are tuned on validation missions only. It is combined with a recurrent proximal policy optimization (PPO) policy \cite{schulman2017}, which is initialized from a privileged teacher \cite{chen2019,ross2011} and fine-tuned with a decaying behavior-cloning anchor \cite{schmitt2018}.
+\item A paired evaluation over 9900 held-out episodes and eleven stress scenarios. It reports success, recovery, vehicle loss and an oracle-feasibility ceiling, with paired bootstrap confidence intervals.
+\end{enumerate}
+
+Fig.~\ref{fig:arch} summarizes the system. Section~\ref{sec:related} reviews related work. Section~\ref{sec:problem} formalizes the problem, Section~\ref{sec:sim} describes the simulator, and Section~\ref{sec:weather} validates its weather processes. Section~\ref{sec:method} presents the learning and safety methods, Section~\ref{sec:setup} the experimental protocol, and Section~\ref{sec:results} the results. Section~\ref{sec:discussion} discusses limitations, and Section~\ref{sec:conclusion} concludes.
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_architecture.pdf}
+{\widecap{System overview. The PPO policy proposes actions from a local observation. The forecast consequence evaluator receives only permitted current information (planner view). It samples $K$ futures conditioned on the recalibrated forecast and estimates each action's probability of becoming unrecoverable, which the recoverability gate uses to accept an action, pick the least-risk action, or trigger an emergency fallback.}\label{fig:arch}}
+
+%=====================================================================
+\section{Related Work}
+\label{sec:related}
+
+\subsection{RL for UAV Navigation and Delivery}
+Deep RL has been applied to UAV path planning in urban grids for data harvesting \cite{bayerlein2021}, navigation \cite{chikhaoui2022} and multi-UAV emergency payload delivery in disaster scenarios \cite{kutpanova2025}. PPO \cite{schulman2017} with generalized advantage estimation \cite{schulman2016} is a common learner, and recurrent memory \cite{hochreiter1997} is used under partial observability. These works optimize expected return. They do not reason explicitly about whether a mission remains completable under uncertain future hazards.
+
+\subsection{Safe RL, Shielding and Viability}
+Safe RL methods constrain exploration or execution \cite{garcia2015}. Shielding \cite{alshiekh2018} blocks actions that violate a temporal-logic specification, and constrained Markov decision processes \cite{altman1999} bound expected costs. Viability theory \cite{aubin1991} and Hamilton--Jacobi reachability \cite{fisac2019} characterize states from which constraints can be satisfied forever. Our shield follows this idea but makes three choices suited to the medical-delivery setting. Recoverability includes the delivery deadline, payload integrity and the return flight. The future is represented by samples conditioned on a probabilistic forecast. The decision rule is graded and includes an emergency fallback instead of a hard block.
+
+\subsection{Planning Under Uncertainty and Hindsight Optimization}
+Evaluating an action by solving deterministic sampled futures is known as hindsight optimization or determinization \cite{yoon2008}. Our evaluator uses this principle with two differences. The futures are sampled so that they reproduce the forecast's marginal flood probabilities exactly, and each future is solved with an exact time-expanded search under the simulator's movement rules. We also use a clairvoyant solver on the \emph{true} future, after the fact, to estimate how many missions are feasible at all.
+
+\subsection{Stochastic Weather and Flood Models}
+Daily rainfall generators often combine a Markov occurrence chain with gamma-distributed amounts \cite{richardson1981,wilks1998}, while latent-Gaussian (meta-Gaussian) models censor a correlated Gaussian process to obtain both occurrence and intensity \cite{bardossy1992,allcroft2003}. Cellular-automaton flood models range from hydraulically detailed schemes \cite{dottori2011} to purely stochastic spread rules. Global satellite flood records \cite{tellman2021} document how widely urban flood extents vary. We use a reduced-complexity stochastic flood automaton and say explicitly that it is not a hydrological solver.
+
+\subsection{Imitation-Initialized RL}
+DAgger \cite{ross2011} reduces the compounding error of behavior cloning. The ``learning by cheating'' paradigm \cite{chen2019} trains a sensor-limited student from a privileged teacher. Kickstarting \cite{schmitt2018} anchors an RL learner to a teacher policy with a decaying divergence penalty. Invalid action masking is a standard tool in policy-gradient methods \cite{huang2022}. We combine these techniques to overcome the exploration bottleneck of long detours around buildings and water.
+
+%=====================================================================
+\section{Problem Formulation}
+\label{sec:problem}
+
+\subsection{Partially Observable Decision Process}
+The simulator has a Markov state $s_t$ that contains the UAV position, battery, elapsed time, payload stability, wind, rainfall, the full flood grid, the static map and the mission parameters. The UAV does not observe $s_t$. It receives a local observation $o_t$ and acts in the partially observable Markov decision process
+\begin{equation}
+\mathcal{M}=(\mathcal{S},\mathcal{A},P,R,\Omega,O,\gamma),
+\label{eq:pomdp}
+\end{equation}
+where $\mathcal{A}$ contains nine actions (eight compass moves and hover), $P$ is the stochastic transition model, $R$ is the reward, $O$ is the observation model and $\gamma=0.99$. The observation consists of a $7\times17\times17$ tensor centered on the UAV and a 15-dimensional vector (Table~\ref{tab:obs}). The tensor channels encode blocked cells, no-fly zones (NFZs), fly-over buildings, the UAV, the target, the current local flood and the local forecast flood probability. The vector encodes battery, remaining deadline, goal offset and distance, heading, wind speed and unit direction, payload stability and requirement, payload type, forecast reliability and normalized time.
+
+\begin{table}[t]
+\caption{Observation Contract (Agent-Visible Information Only)}
+\label{tab:obs}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{70pt}p{168pt}@{}}
+\toprule
+Component & Content \\
+\midrule
+Spatial tensor & 7 channels, $17\times17$ local window: blocked, NFZ, fly-over building, UAV, target (if visible), current flood, forecast flood probability \\
+Vector (15) & battery, deadline remaining, goal $\Delta x$, $\Delta y$, distance, heading $(x,y)$, wind speed, wind unit direction $(x,y)$, payload stability, required stability, payload type, forecast reliability $\alpha$, time \\
+Not observed & full flood grid, future flood and wind, random-generator state \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Missions and Outcomes}
+A mission draws a start base, a hospital target among the farthest 20\% of reachable cells, a battery budget, a deadline, a payload type (standard or fragile) and weather and flood parameters. A mission is \emph{successful} if the UAV reaches the target before the deadline with payload stability above the required threshold (0.40 standard, 0.80 fragile). The vehicle is \emph{lost} if it collides with a building, an NFZ or the map boundary, enters or is engulfed by a flooded cell, or runs out of battery. A \emph{safe abort} occurs when the fallback controller lands the UAV on a dry base or rooftop.
+
+\subsection{Recoverability}
+Let $\hat T_D$ and $\hat E_D$ be the time and energy needed to deliver after action $a$, including any hover time needed to re-stabilize the payload. Let $\hat E_R$ be the energy needed to reach a dry landing site afterwards. With remaining deadline $\tau_D$, battery $B_t$, reserve $B_{\mathrm{res}}=0.1B_0$, initial deadline $\tau_0$ and initial battery $B_0$, the recoverability margin in one future $k$ is
+\begin{align}
+m_T^{(k)}&=\frac{\tau_D-\hat T_D^{(k)}}{\tau_0},\nonumber\\
+m_E^{(k)}&=\frac{B_t-\hat E_D^{(k)}-\hat E_R^{(k)}-B_{\mathrm{res}}}{B_0},\nonumber\\
+\Mrec^{(k)}(s,a)&=\min\big(m_T^{(k)},\,m_E^{(k)}\big),
+\label{eq:margin}
+\end{align}
+with $\Mrec^{(k)}=-1$ if the target cannot be reached in that future. The probability of unrecoverability over $K$ forecast-conditioned futures is
+\begin{equation}
+\Punrec(s,a)=\frac{1}{K}\sum_{k=1}^{K}\mathbb{1}\!\left[\Mrec^{(k)}(s,a)<0\right].
+\label{eq:punrec}
+\end{equation}
+
+%=====================================================================
+\section{Simulation Environment}
+\label{sec:sim}
+
+\subsection{Map}
+We use the Manhattan32 benchmark grid \cite{bayerlein2021}, a $32\times32$ map in which each pixel is one cell. Its classes are free airspace (682 cells), NFZs (70), fly-over buildings (105), towers inside NFZs (149) and base or landing pads (18). NFZs and towers are blocked, giving 219 blocked cells. Movement is 8-connected with cardinal cost 1 and diagonal cost $\sqrt{2}$, and diagonal corner cutting is forbidden.
+
+\subsection{Wind}
+Sustained wind speed follows a first-order autoregressive (AR(1)) process,
+\begin{equation}
+V_{t+1}=\max\!\big(0.5,\;\mu_V+\rho_V(V_t-\mu_V)+\sigma_V\sqrt{1-\rho_V^2}\,\varepsilon_t\big),
+\label{eq:wind}
+\end{equation}
+with $\varepsilon_t\sim\mathcal{N}(0,1)$. Direction (the direction toward which air moves) is a uniform random walk, and gusts arrive with probability $p_g$, have uniform magnitude and halve in strength each step otherwise. Movement energy is the base cost (1, $\sqrt{2}$ or 0.5 for hover) multiplied by $\mathrm{clip}(1-0.2\,\hat m\cdot\hat w\,\mathrm{clip}(S/15,0,1),0.75,1.40)$, where $\hat m$ is the movement direction, $\hat w$ the wind direction and $S$ the total wind speed in m/s.
+
+\subsection{Rainfall and Flood}
+Rain intensity $R_t\in[0,1]$ follows a clipped Gaussian AR(1) process with the same structure as \eqref{eq:wind}. The flood grid $F_t$ is binary and expansion-only. A dry traversable cell $c$ with $n_c\ge1$ flooded four-neighbors floods with probability
+\begin{multline}
+p_c=\mathrm{clip}\big(k\,n_c(0.5+0.75R_t)\\
++k_w\max(0,\bar a_c)\,\mathrm{clip}(S/15,0,1),\;0,\;0.6\big),
+\label{eq:flood}
+\end{multline}
+where $\bar a_c$ is the mean alignment between the wind and the direction from flooded neighbors toward $c$. Isolated cells flood spontaneously with probability $0.001R_t$. The wind term is a directional heuristic, not a validated physical law.
+
+When the audited scenario ranges were used unchanged, a clairvoyant planner with access to the true future flood could complete only 62\% of normal and 0\% of dynamic-flood missions, and about 43\% of free airspace was flooded after 40 steps. We therefore rescaled the scenario ranges of the expansion rate ($\times0.35$) and initial flood ratio ($\times0.5$). The transition formula \eqref{eq:flood} is unchanged, and the original ranges remain available for reproducibility.
+
+\subsection{Payload, Forecast and Reward}
+Payload stability decreases with normalized crosswind, gust strength and turn severity, scaled by payload-type sensitivity. It recovers by 0.04 per hover step unless it has fallen below the catastrophic level of 0.15. The forecast propagates flood probabilities over a ten-step horizon with a mean-field version of \eqref{eq:flood}. Each step converts a hazard rate $\lambda$ to a probability $1-e^{-\lambda}$, and the result is blended with a background prior,
+\begin{equation}
+p^{\mathrm{vis}}=\alpha\,p^{\mathrm{model}}+(1-\alpha)\,0.05,
+\label{eq:blend}
+\end{equation}
+where $\alpha$ is the scenario's forecast reliability. The forecast reads only the current state and never the simulator's random generator. The reward contains a step cost, progress toward the target, energy and payload penalties, a delivery bonus of $+100$ and terminal penalties.
+
+The original reward penalized flood crashes ($-30$) less than missed deadlines ($-50$), which makes crashing early optimal for an agent that expects to fail. In the first training run, 65\% of episodes ended this way. The training reward therefore sets every hazard penalty to $-60$ and measures progress along the geodesic (obstacle- and flood-aware) distance. All evaluations use mission outcomes, not reward.
+
+\subsection{Stress Profiles}
+Eleven profiles (Table~\ref{tab:profiles}) vary battery, deadline, wind, flooding, payload fragility and forecast reliability. The table also reports the share of test missions that are \emph{oracle-feasible}, that is, solvable by a planner that knows the true future flood. This share is an optimistic ceiling, because the oracle ignores payload integrity and the return flight.
+
+\begin{table}[t]
+\caption{Stress Profiles and Oracle-Feasible Share of Test Missions}
+\label{tab:profiles}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{78pt}p{126pt}r@{}}
+\toprule
+Profile & Definition & Feasible \\
+\midrule
+normal & default scenario ranges & 95\% \\
+low battery & battery 1.3--1.9$\times$ straight-line distance & 95\% \\
+tight deadline & deadline 1.12--1.30$\times$ minimum steps & 94\% \\
+strong wind & mean wind 11--14 m/s, frequent gusts & 93\% \\
+dynamic flood & heavy rain, 2$\times$ seeds, 1.5$\times$ spread & 52\% \\
+fragile & all payloads fragile (stability $\ge0.80$) & 95\% \\
+wind + flood & strong wind and dynamic flood & 39\% \\
+low battery + deadline & both resource limits & 94\% \\
+compound & battery, deadline, wind and flood & 36\% \\
+all combined & every stress factor, fragile payload & 46\% \\
+low forecast reliability & $\alpha\in[0.20,0.45]$ & 95\% \\
+\midrule
+all profiles & & 75.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%=====================================================================
+\section{Empirical Validation of the Weather Processes}
+\label{sec:weather}
+
+\subsection{Data and Protocol}
+We retrieved hourly ERA5 reanalysis \cite{hersbach2020} through the Open-Meteo archive \cite{zippenfenig2023} for Mumbai, India (19.08\,$^\circ$N, 72.88\,$^\circ$E), a coastal city with recurrent monsoon floods. We used precipitation, 10-m wind speed and direction, and 10-m gusts for the June--September monsoon of 2021--2023. Models were fitted on 2021--2022 (5856 hours) and tested on the held-out year 2023 (2928 hours). One simulator weather step is taken to be one hour. The original processes were evaluated by running the simulator's own classes, and normalized rain was mapped to millimeters per hour with a reference of 10~mm/h. Each model was simulated 40 times over the test length. A statistic \emph{passes} if the observed value lies inside the central 95\% simulation range, or if the simulated median is within $\pm20\%$ of it.
+
+\subsection{Candidate Models}
+For rainfall we compared the original clipped AR(1), a Markov-chain occurrence model with gamma amounts \cite{richardson1981}, a censored latent-Gaussian AR(1) \cite{bardossy1992,allcroft2003}, and a two-timescale latent model
+\begin{align}
+Z_t&=\sqrt{w}\,Z^{f}_t+\sqrt{1-w}\,Z^{s}_t,\nonumber\\
+P_t&=\begin{cases}0,& Z_t\le c,\\[2pt] P_{\mathrm{wet}}+F_\Gamma^{-1}\!\left(\dfrac{\Phi(Z_t)-\Phi(c)}{1-\Phi(c)}\right),& Z_t>c,\end{cases}
+\label{eq:rain2}
+\end{align}
+where $Z^f$ and $Z^s$ are unit AR(1) processes with fitted coefficients $\rho_f=0.688$ and $\rho_s=0.997$ and weight $w=0.343$. The threshold $c$ reproduces the wet-hour fraction, and $F_\Gamma$ is a gamma distribution fitted to wet-hour amounts. The weights and coefficients were fitted to lag-1 to lag-48 wet--wet joint probabilities through the bivariate normal orthant probability. For wind we compared the original process with a bivariate vector autoregression (VAR(1)) on the eastward and northward components $\mathbf{w}_t$, with a diurnal mean,
+\begin{equation}
+\mathbf{w}_t=\mathbf{m}(h_t)+\mathbf{d}_t,\qquad \mathbf{d}_{t+1}=A\,\mathbf{d}_t+\mathbf{e}_t,\quad \mathbf{e}_t\sim\mathcal{N}(0,\Sigma),
+\label{eq:var}
+\end{equation}
+where $\mathbf{m}(h)$ contains 24-h and 12-h harmonics, and with a speed-dependent AR(1) gust excess.
+
+\subsection{Findings}
+Table~\ref{tab:weather} and Figs.~\ref{fig:rain}--\ref{fig:wind} summarize the comparison.
+\begin{itemize}
+\item \emph{Rainfall.} The original process reproduces short-term persistence (lag-1 autocorrelation 0.80 versus 0.91) and the wet-hour fraction. It produces wet spells that are too short (10.3 versus 29.4 hours), a thin intensity tail, and almost no memory at 24 hours. A Ljung--Box test \cite{ljung1978} on its AR(1) residuals rejects whiteness ($p=4.9\times10^{-21}$). The Markov--gamma model loses intensity persistence (lag-1 autocorrelation 0.07). The two-timescale latent model passes all 14 statistics and recovers the multi-day monsoon memory (lag-24 autocorrelation 0.41 versus 0.49).
+\item \emph{Wind.} The original speed process reproduces the mean, spread and lag-1 autocorrelation of wind speed (0.972 versus 0.972). Its unbounded random-walk direction has no prevailing wind: the mean resultant length is 0.10, whereas the monsoon flow is strongly organized (0.82). The VAR(1) model reproduces the prevailing direction (0.80), the mean wind components and the persistent gust excess, and passes 17 of 18 statistics.
+\item \emph{Mission defaults.} The original scenario ranges (mean wind 8.4 m/s; mean rain intensity 0.53) lie far above monsoon climatology and act as stress settings. The calibrated models are provided as an optional environment version. All learning experiments use the frozen original processes, so the comparisons below remain consistent.
+\end{itemize}
+
+\begin{table}[t]
+\caption{Weather Validation on the Held-Out Monsoon Season (Mumbai, 2023)}
+\label{tab:weather}
+\footnotesize
+\setlength{\tabcolsep}{2.2pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Statistic & Obs. & Orig. & Markov--$\Gamma$ & Two-scale \\
+\midrule
+Mean rain (mm/h) & 0.70 & 0.91 & 0.63 & 0.62 \\
+Wet-hour fraction & 0.84 & 0.84 & 0.83 & 0.85 \\
+Mean wet spell (h) & 29.4 & 10.3 & 18.9 & 18.3 \\
+99th pct. wet rain (mm/h) & 5.40 & 2.88 & 4.79 & 3.77 \\
+Rain lag-1 autocorr. & 0.91 & 0.80 & 0.07 & 0.81 \\
+Rain lag-24 autocorr. & 0.49 & $-0.01$ & 0.00 & 0.41 \\
+\textbf{Rain statistics passed} & & \textbf{5/14} & \textbf{6/14} & \textbf{14/14} \\
+\midrule
+ & Obs. & Orig. & VAR(1) & +diurnal \\
+\midrule
+Mean speed (m/s) & 4.15 & 4.09 & 3.95 & 3.97 \\
+Speed lag-1 autocorr. & 0.97 & 0.97 & 0.98 & 0.98 \\
+Speed lag-24 autocorr. & 0.82 & 0.52 & 0.53 & 0.60 \\
+Direction steadiness $\bar R$ & 0.82 & 0.10 & 0.80 & 0.80 \\
+Gust-excess lag-1 autocorr. & 0.90 & 0.17 & 0.89 & 0.89 \\
+\textbf{Wind statistics passed} & & \textbf{12/18} & \textbf{17/18} & \textbf{17/18} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_rain.pdf}
+{\widecap{Rainfall validation on the held-out 2023 monsoon. (a) Exceedance probability of wet-hour intensity; (b) wet-spell and (c) dry-spell length; (d) autocorrelation (median and 95\% band over 40 simulations). The original clipped AR(1) process (orange) has a thin tail, short spells and fast-decaying memory. The two-timescale latent-Gaussian model (blue) follows the observed curves (black).}\label{fig:rain}}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_wind.pdf}
+{\widecap{Wind validation on the held-out 2023 monsoon: (a) speed distribution, (b) gust excess, (c) hour-to-hour direction change, and (d) speed autocorrelation. The original speed process is adequate. Its direction random walk and intermittent gusts are not supported by the data.}\label{fig:wind}}
+
+%=====================================================================
+\section{Method}
+\label{sec:method}
+
+\subsection{Policy Architecture and Training}
+The actor-critic encoder applies three $3\times3$ convolutions (32, 64 and 64 channels; the second with stride 2) to the spatial tensor, followed by a 256-unit layer. It fuses the result with a 64-unit embedding of the vector and passes the fused features through a 256-unit long short-term memory (LSTM) \cite{hochreiter1997}. Actor and critic heads follow. Feed-forward variants replace the LSTM (CNN) or replace the whole encoder with a multilayer perceptron (MLP) over the flattened input. Actions that hit static geometry (boundary, blocked cells and corner cutting) are masked \cite{huang2022}. Dynamic hazards are deliberately not masked, so that the safety ablations remain meaningful.
+
+PPO trained from scratch converged to hovering until the deadline. Long detours around buildings and water were never discovered, and hovering also restores payload stability. We therefore use a privileged-teacher initialization \cite{chen2019}. A shortest-path planner \cite{hart1968} that sees the full current flood map labels 2500 training missions (82\,211 states). The local-view student is cloned from these labels and refined with two DAgger rounds \cite{ross2011} of 1200 missions each, reaching 97\% action agreement. PPO \cite{schulman2017} then fine-tunes the student with the objective
+\begin{equation}
+L(\theta)=L^{\mathrm{CLIP}}(\theta)-c_v L^{V}(\theta)+c_e\mathcal{H}[\pi_\theta]-\beta_k\,\mathrm{KL}\!\left(\pi_{\mathrm{BC}}\,\|\,\pi_\theta\right),
+\label{eq:ppo}
+\end{equation}
+where $\beta_k$ decays linearly from 1.0 to 0.05 \cite{schmitt2018}. The clone's action distribution $\pi_{\mathrm{BC}}$ is recorded during roll-outs with its own recurrent state. The first ten updates train the critic head only, so that a randomly initialized critic cannot overwrite the cloned features. Without this warm-up, success fell from 37\% to 4\% within ten updates. Advantages use generalized advantage estimation \cite{schulman2016}. Hyperparameters are listed in Table~\ref{tab:hyper}, and training curves are shown in Fig.~\ref{fig:training}.
+
+\begin{table}[t]
+\caption{Training and Shield Hyperparameters}
+\label{tab:hyper}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Parameter & Value \\
+\midrule
+Parallel environments $\times$ roll-out length & $128\times128$ \\
+PPO epochs / minibatches & 4 / 8 \\
+Learning rate (fine-tuning) & $1\times10^{-4}$, linear decay \\
+$\gamma$, GAE $\lambda$, clip $\epsilon$ & 0.99, 0.95, 0.2 \\
+Entropy / value coefficients & 0.003 / 0.25 \\
+KL anchor $\beta$ & $1.0\rightarrow0.05$ \\
+Fine-tuning steps per variant & $2\times10^{6}$ \\
+Evaluator samples $K$ / confirmation / fallback & 16 / 48 / 8 \\
+Safety threshold $\delta$ / abort threshold $\delta_{\mathrm{abort}}$ & 0.30 / 0.85 \\
+Indifference margin $\varepsilon$ & 0.10 \\
+Battery reserve & $0.1B_0$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_training.pdf}
+{\widecap{PPO fine-tuning from the behavior-cloned initialization: (a) rolling training success on the mixed training scenarios and (b) mean episode return.}\label{fig:training}}
+
+\subsection{Forecast Consequence Evaluator}
+The evaluator receives a \emph{planner view}: the static map, the current flood grid, the visible forecast, the observed wind and the UAV state. It has no access to the simulator's random generator or to sampled futures. A unit test verifies that its output does not change when the hidden random state changes.
+
+\emph{Forecast-conditioned flood futures.} The visible forecast is extended beyond its ten-step horizon with the same causal propagation and is recalibrated as described below. This gives non-decreasing probabilities $\tilde p_h(c)$. Each future $k$ draws one spatially correlated uniform field $U_k$, obtained by passing Gaussian-smoothed white noise through the normal distribution function, and sets
+\begin{equation}
+F_k[h](c)=\mathbb{1}\big[U_k(c)<\tilde p_h(c)\big].
+\label{eq:threshold}
+\end{equation}
+Because $\tilde p_h$ is non-decreasing in $h$, every sampled flood sequence is monotone, and its marginals equal the forecast exactly. Wind futures are drawn from the scenario's wind model, starting from the observed wind.
+
+\emph{Exact feasibility in each future.} For every immediately feasible action, the evaluator runs a time-expanded minimum-energy dynamic program over the sampled masks. It uses the simulator's movement rules: no entry into flooded or blocked cells, no corner cutting, and engulfment if the occupied cell floods. All actions and all futures are processed in one vectorized pass. The payload allowance converts the expected stability deficit at arrival into hover time; an empirical check found the predicted per-step disturbance (0.035) close to the measured value (0.038). The return leg is planned to the nearest dry base or rooftop on each future's flood state at delivery time. Equations \eqref{eq:margin}--\eqref{eq:punrec} then give $\Punrec$.
+
+\subsection{Forecast Recalibration}
+On training missions, the visible forecast over-predicts flooding by a factor of 2--4 at short lead times, mainly because of the prior in \eqref{eq:blend}. This makes safe actions look risky. Following standard probability-calibration practice \cite{zadrozny2002,brier1950}, we fit an isotonic map $\tilde p=g_{\ell,\alpha}(p^{\mathrm{vis}})$ for six lead-time buckets $\ell$ and three reliability buckets $\alpha$. The map is fitted on 420 training missions, and it reduces the pooled Brier score from 0.115 to 0.103 (Fig.~\ref{fig:calibration}). It is used only by the evaluator. The agent's observation is unchanged.
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=0.98\columnwidth]{figures/fig_calibration.pdf}
+{Reliability of the raw visible flood forecast on training missions, by lead time (isotonic fit, medium reliability bucket). Points below the diagonal indicate over-forecasting. The fitted curves form the recalibration map used by the evaluator.\label{fig:calibration}}
+
+\subsection{Recoverability Shield and Fallback}
+Let $\pi(\cdot\,|\,o_t,h_t)$ be the policy and $\mathcal{A}_{\mathrm{imm}}$ the set of actions that pass the immediate check: no collision, no flooded destination or corner, positive battery, no catastrophic payload damage, and a deadline that is still reachable. The shield computes
+\begin{align}
+\mathcal{A}_{\mathrm{safe}}&=\{a\in\mathcal{A}_{\mathrm{imm}}:\Punrec(s,a)\le\delta\},\label{eq:shield}\\
+a^{*}&=\arg\max_{a\in\mathcal{A}_{\mathrm{safe}}}\pi(a\,|\,o_t,h_t).\label{eq:select}
+\end{align}
+One Monte Carlo estimate with $K=16$ is noisy, and the check is repeated at every step. An empty safe set is therefore first confirmed with an independent sample of 48 futures. If it remains empty and $P_{\min}=\min_a\Punrec<\delta_{\mathrm{abort}}$, the shield executes the policy's preferred action among those within an indifference margin $\varepsilon$ of $P_{\min}$. Otherwise the fallback controller evaluates a return to base and a rooftop landing with the same evaluator, with hover allowed as a first step. It executes the option most likely to reach its goal with the reserve intact, and lands on arrival. The policy continues to run, so the mission resumes if a safe delivery action reappears. The \emph{deterministic} ablation replaces the $K$ futures with a single nominal future that thresholds $\tilde p_h$ at 0.5 and uses mean wind.
+
+%=====================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+Seeds are disjoint by role: training $[0,10^6)$, validation $10^6+i$ (used only to tune $\delta$ and $\delta_{\mathrm{abort}}$), and test $2\times10^6+i$ with $i<100$ per profile. Every method flies identical missions with identical hidden weather and flood realizations, so all comparisons are paired. We compare nine controllers:
+\begin{itemize}
+\item a random policy;
+\item the behavior-cloned CNN+LSTM student before PPO;
+\item PPO with MLP, CNN, CNN+LSTM and CNN+LSTM trained with a forecast-risk reward penalty;
+\item the CNN+LSTM policy with an immediate safety filter, with deterministic recoverability, and with probabilistic recoverability (the full method).
+\end{itemize}
+The thresholds were selected from $\delta\in\{0.2,0.3,0.4\}\times\delta_{\mathrm{abort}}\in\{0.5,0.7,0.85\}$. The selection maximized delivered-and-recoverable missions on $11\times16$ validation missions, subject to a UAV-loss rate of at most 8\%. The chosen setting ($\delta=0.3$, $\delta_{\mathrm{abort}}=0.85$) reached 42.6\% success with 2.3\% loss on validation.
+
+\emph{Metrics.} We report the following:
+\begin{itemize}
+\item \emph{Success}, with a 95\% Wilson interval \cite{wilson1927}.
+\item \emph{Success and recovery}: delivered, and able to reach a dry landing site with the remaining battery on the \emph{true} future flood, checked after the fact.
+\item \emph{UAV loss}.
+\item \emph{Safe abort}.
+\item \emph{Future failure}: the mission failed although every executed action passed the immediate check.
+\item \emph{Intervention rate}.
+\end{itemize}
+Differences between methods are mean paired differences with 95\% paired-bootstrap intervals \cite{efron1993}. Experiments ran on a 32-thread CPU with an RTX~4060 laptop GPU.
+
+%=====================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Overall Comparison}
+Table~\ref{tab:overall} and Figs.~\ref{fig:outcomes}--\ref{fig:tradeoff} pool all 1100 missions per method. The full method achieves the highest success (38.8\%) and the highest success-and-recovery rate (38.5\%). It reduces the UAV-loss rate from 31.1\% (immediate filter) and 35.5\% (unshielded policy) to 6.1\%. Future failures fall from 27.1\% to 7.9\%. Without the recoverability layer, many failures occur \emph{after} a sequence of individually safe actions; this is the failure mode the research question targets. The price of the recoverability layer is caution: 50.9\% of missions end in a safe abort.
+
+\begin{table*}[t]
+\caption{Overall Results on 1100 Paired Held-Out Missions per Method (All Eleven Profiles Pooled)}
+\label{tab:overall}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.6pt}
+\begin{tabular}{@{}lcccccccr@{}}
+\toprule
+Method & Success (95\% CI) & Success+recovery & UAV lost & Deadline & Payload & Safe abort & Future failure & Interventions \\
+\midrule
+Random & 0.0\% (0.0--0.3) & 0.0\% & 98.4\% & 1.6\% & 0.0\% & 0.0\% & 2.5\% & -- \\
+BC student (no PPO) & 29.3\% (26.7--32.0) & 27.9\% & 37.7\% & 27.6\% & 5.4\% & 0.0\% & 23.5\% & -- \\
+PPO (MLP) & 34.8\% (32.1--37.7) & 32.4\% & 30.0\% & 29.9\% & 5.3\% & 0.0\% & 23.6\% & -- \\
+PPO + CNN & 36.8\% (34.0--39.7) & 34.3\% & 31.2\% & 29.5\% & 2.5\% & 0.0\% & 21.0\% & -- \\
+PPO + CNN + LSTM & 33.4\% (30.6--36.2) & 31.9\% & 35.5\% & 27.4\% & 3.7\% & 0.0\% & 20.8\% & -- \\
+PPO + CNN + LSTM + risk reward & 35.0\% (32.2--37.9) & 33.5\% & 32.8\% & 29.1\% & 3.1\% & 0.0\% & 17.2\% & -- \\
+\quad + immediate safety filter & 38.4\% (35.5--41.3) & 36.4\% & 31.1\% & 23.8\% & 6.7\% & 0.0\% & 27.1\% & 2.0\% \\
+\quad + deterministic recoverability & 36.5\% (33.7--39.3) & 36.1\% & 6.5\% & 5.4\% & 3.2\% & 48.5\% & 9.0\% & 34.7\% \\
+\quad + \textbf{probabilistic recoverability (full)} & \textbf{38.8\% (36.0--41.7)} & \textbf{38.5\%} & \textbf{6.1\%} & 2.1\% & 2.1\% & 50.9\% & \textbf{7.9\%} & 37.5\% \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_outcomes.pdf}
+{\widecap{How missions end (all profiles pooled). Only the recoverability shields convert would-be losses into safe aborts.}\label{fig:outcomes}}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=0.98\columnwidth]{figures/fig_tradeoff.pdf}
+{Safety versus delivery. The recoverability shields move the operating point to a much lower loss rate, without reducing success.\label{fig:tradeoff}}
+
+\subsection{Paired Comparisons}
+Table~\ref{tab:paired} lists paired differences on identical missions. Against the immediate filter, the full method changes UAV losses by $-25.0$ percentage points (pp), with a 95\% interval of $[-27.6,-22.4]$. Raw success changes by $+0.5$~pp ($[-1.1,+2.0]$), which is not significant. Delivered-and-recoverable missions increase by $+2.1$~pp ($[+0.8,+3.5]$). Compared with deterministic recoverability on one nominal future, sampling futures adds $+2.4$~pp of success at an equal loss rate. The immediate filter alone helps less: it lowers losses by only 4.5~pp and increases future failures. Removing obvious one-step mistakes leaves the remaining failures to happen later.
+
+\begin{table*}[t]
+\caption{Paired Differences on Identical Missions (Percentage Points, 95\% Paired-Bootstrap Interval)}
+\label{tab:paired}
+\centering
+\setlength{\tabcolsep}{10pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Comparison & $\Delta$ Success & $\Delta$ Succ.+rec. & $\Delta$ UAV lost \\
+\midrule
+Full vs.\ immediate & $+0.5$ [$-1.1$, $2.0$] & $+2.1$ [$0.8$, $3.5$] & $-25.0$ [$-27.6$, $-22.4$] \\
+Full vs.\ unshielded & $+5.5$ [$3.6$, $7.4$] & $+6.5$ [$4.8$, $8.3$] & $-29.5$ [$-32.3$, $-26.6$] \\
+Full vs.\ deterministic & $+2.4$ [$1.1$, $3.6$] & $+2.4$ [$1.2$, $3.6$] & $-0.4$ [$-1.6$, $0.9$] \\
+Immediate vs.\ unshielded & $+5.0$ [$3.7$, $6.4$] & $+4.5$ [$3.2$, $5.7$] & $-4.5$ [$-6.5$, $-2.3$] \\
+PPO vs.\ BC student & $+4.1$ [$2.2$, $6.1$] & $+4.0$ [$2.1$, $5.9$] & $-2.2$ [$-4.7$, $0.5$] \\
+Risk reward vs.\ none & $+1.6$ [$0.0$, $3.4$] & $+1.6$ [$0.0$, $3.4$] & $-2.7$ [$-5.3$, $-0.2$] \\
+LSTM vs.\ CNN & $-3.5$ [$-5.6$, $-1.3$] & $-2.4$ [$-4.5$, $-0.3$] & $+4.4$ [$1.4$, $7.3$] \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Per-Profile Results}
+Table~\ref{tab:profile} and Figs.~\ref{fig:success}--\ref{fig:loss} break the results down by profile. On the seven profiles in which at least 93\% of missions are oracle-feasible, the full method delivers 58.0\% on average, with 71\% in the normal profile. In the four disaster profiles only 36--52\% of missions are feasible even for the oracle. There, the full method delivers few missions, but it reduces UAV losses dramatically: from 66\% to 13\% under dynamic flooding, from 67\% to 5\% under wind and flooding, and from 53\% to 0\% when all stresses are combined. Restricted to oracle-feasible missions, the full method delivers 51.2\%.
+
+\begin{table}[t]
+\caption{Success and UAV Loss per Profile: Unshielded / Immediate Filter / Full Method}
+\label{tab:profile}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Profile & Success (\%) & UAV lost (\%) \\
+\midrule
+normal & 60 / 69 / \textbf{71} & 23 / 13 / \textbf{7} \\
+low battery & 56 / 63 / 60 & 30 / 21 / \textbf{3} \\
+tight deadline & 50 / 60 / \textbf{64} & 15 / 9 / \textbf{4} \\
+strong wind & 37 / 42 / \textbf{45} & 28 / 21 / \textbf{9} \\
+dynamic flood & 8 / 10 / \textbf{13} & 67 / 66 / \textbf{13} \\
+fragile & 43 / 49 / \textbf{53} & 26 / 17 / \textbf{9} \\
+wind + flood & 7 / 7 / 5 & 66 / 67 / \textbf{5} \\
+low battery + deadline & 45 / 50 / 44 & 17 / 11 / \textbf{2} \\
+compound & 3 / 4 / 3 & 40 / 47 / \textbf{4} \\
+all combined & 0 / 0 / 0 & 53 / 53 / \textbf{0} \\
+low forecast reliability & 58 / 68 / \textbf{69} & 26 / 17 / \textbf{11} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_success_profile.pdf}
+{\widecap{Mission success by stress profile. Black markers show the share of missions that a clairvoyant planner could complete, an optimistic ceiling that ignores payload integrity and the return flight.}\label{fig:success}}
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_loss_profile.pdf}
+{\widecap{UAV-loss rate by stress profile. The recoverability shields reduce losses in every profile, most strongly in the flood-dominated disaster profiles.}\label{fig:loss}}
+
+\subsection{Illustrative Mission}
+Fig.~\ref{fig:showcase} shows one tight-deadline mission with a fragile payload. The immediate filter and the full method fly the same mission with the same hidden flood. The immediate filter accepts the policy's direct route and arrives with a payload below the delivery threshold. The full method overrides the policy at a few decision points (orange segments) and selects moves with a lower estimated probability of unrecoverability. It reaches the hospital with a valid payload in the same number of steps.
+
+\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt)[width=\textwidth]{figures/fig_showcase.pdf}
+{\widecap{Same mission and same hidden flood (tight-deadline profile, fragile payload), flown with the immediate safety filter (left) and the full recoverability shield (right). Blue cells are flooded, shaded by the step at which they flooded. Gray cells are towers, pink cells are no-fly zones, green cells are fly-over buildings, and yellow cells are base pads. Orange path segments mark shield overrides.}\label{fig:showcase}}
+
+\subsection{Learning Ablations and Cost}
+PPO fine-tuning improves on its behavior-cloned initialization by $+4.1$~pp. The forecast-risk reward lowers losses slightly ($-2.7$~pp). In this setting the CNN outperformed the CNN+LSTM ($+3.5$~pp), possibly because the observation already includes the forecast and the episodes are short. The simulator runs at about 1150 steps per second per core, 1.5 times faster than the original loop implementation, with identical trajectories. The full shield takes about 0.5~s per decision on one CPU core (17~s per mission). The deterministic variant takes 1.3~s per mission, and the unshielded policy 0.4~s.
+
+%=====================================================================
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\emph{Why pooled success is about 39\%.} The pooled figure averages scenarios of very different difficulty. Only 75.8\% of all test missions are feasible even with perfect foresight, and this oracle ignores payload integrity and the return flight. An inspection of the remaining aborts on oracle-feasible missions found that most were correct decisions. In typical cases, a fragile payload could not be re-stabilized before the deadline, or a low battery made a safe landing impossible after delivery. The remaining gap is due to the learned policy, which sees a $17\times17$ window and was fine-tuned for two million steps.
+
+\emph{Meaning for deployment.} The results support the research hypothesis in simulation: recoverability checks sharply reduce failures that one-step checks miss, without reducing recoverable deliveries. The absolute rates are not real-world performance figures. The flood automaton is synthetic and not calibrated to observed inundation, its wind--flood coupling is a heuristic, and operational services postpone flights in severe weather instead of flying into them. Even in the normal profile, the full method loses 7\% of vehicles, which is far above what aviation practice would tolerate.
+
+\emph{Validity.} The weather processes were validated for one location and season at hourly resolution. Mapping one simulator step to one hour of weather is a modeling choice. ERA5 grid cells are much larger than the map, and diurnal structure remains partly unexplained (Ljung--Box tests reject whiteness for every first-order model). The evaluator's per-future controller is clairvoyant within each sample. Caution therefore comes from the spread of the sampled futures, which in turn depends on forecast calibration. Calibrating the flood model and its forecast requires time-stamped flood observations, such as repeated Sentinel-1 acquisitions. Maximum-extent products \cite{tellman2021} are not sufficient for this purpose.
+
+%=====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+We presented a forecast-aware recoverability shield for emergency medical UAV navigation in flooding cities, together with a validated stochastic simulator and a paired benchmark. Sampling forecast-consistent futures and solving each one exactly allows the shield to recognize actions that are safe now but doom the mission later. Compared with a conventional immediate filter, UAV losses fall from 31.1\% to 6.1\%, while delivered-and-recoverable missions do not decrease. Future work will calibrate the flood process with time-stamped satellite observations, extend the method to multiple vehicles and continuous dynamics, and learn policies that internalize recoverability, so that the shield needs to intervene less often.
+
+\appendix
+\section{Reproducibility}
+The repository contains the simulator, validation pipeline, training and evaluation scripts, trained models, all episode-level results and an interactive browser-based demonstration. A source-audited inventory lists every simulator equation, its parameters and its validation status. An equivalence test replays complete episodes against the original implementation and requires identical rewards, terminations, flood grids and observations. The ERA5 data were obtained from the Open-Meteo archive under a CC BY 4.0 license.
+
+\section*{Acknowledgment}
+The authors thank the providers of the ERA5 reanalysis (Copernicus Climate Change Service) and the Open-Meteo project.
+
+%=====================================================================
+\begin{thebibliography}{00}
+
+\bibitem{ackerman2019} E. Ackerman and M. Koziol, ``The blood is here: Zipline's medical delivery drones are changing the game in Rwanda,'' \emph{IEEE Spectr.}, vol. 56, no. 5, pp. 24--31, May 2019.
+
+\bibitem{alshiekh2018} M. Alshiekh, R. Bloem, R. Ehlers, B. K\"{o}nighofer, S. Niekum, and U. Topcu, ``Safe reinforcement learning via shielding,'' in \emph{Proc. AAAI Conf. Artif. Intell.}, New Orleans, LA, USA, 2018, pp. 2669--2678.
+
+\bibitem{garcia2015} J. Garc\'{i}a and F. Fern\'{a}ndez, ``A comprehensive survey on safe reinforcement learning,'' \emph{J. Mach. Learn. Res.}, vol. 16, pp. 1437--1480, 2015.
+
+\bibitem{aubin1991} J.-P. Aubin, \emph{Viability Theory}. Boston, MA, USA: Birkh\"{a}user, 1991.
+
+\bibitem{fisac2019} J. F. Fisac, A. K. Akametalu, M. N. Zeilinger, S. Kaynama, J. Gillula, and C. J. Tomlin, ``A general safety framework for learning-based control in uncertain robotic systems,'' \emph{IEEE Trans. Autom. Control}, vol. 64, no. 7, pp. 2737--2752, Jul. 2019.
+
+\bibitem{towers2024} M. Towers \emph{et al.}, ``Gymnasium: A standard interface for reinforcement learning environments,'' 2024, \emph{arXiv:2407.17032}.
+
+\bibitem{hersbach2020} H. Hersbach \emph{et al.}, ``The ERA5 global reanalysis,'' \emph{Quart. J. Roy. Meteorol. Soc.}, vol. 146, no. 730, pp. 1999--2049, 2020.
+
+\bibitem{schulman2017} J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, ``Proximal policy optimization algorithms,'' 2017, \emph{arXiv:1707.06347}.
+
+\bibitem{chen2019} D. Chen, B. Zhou, V. Koltun, and P. Kr\"{a}henb\"{u}hl, ``Learning by cheating,'' in \emph{Proc. Conf. Robot Learn. (CoRL)}, 2019, pp. 66--75.
+
+\bibitem{ross2011} S. Ross, G. Gordon, and D. Bagnell, ``A reduction of imitation learning and structured prediction to no-regret online learning,'' in \emph{Proc. Int. Conf. Artif. Intell. Statist. (AISTATS)}, 2011, pp. 627--635.
+
+\bibitem{schmitt2018} S. Schmitt \emph{et al.}, ``Kickstarting deep reinforcement learning,'' 2018, \emph{arXiv:1803.03835}.
+
+\bibitem{bayerlein2021} H. Bayerlein, M. Theile, M. Caccamo, and D. Gesbert, ``Multi-UAV path planning for wireless data harvesting with deep reinforcement learning,'' \emph{IEEE Open J. Commun. Soc.}, vol. 2, pp. 1171--1187, 2021.
+
+\bibitem{chikhaoui2022} K. Chikhaoui, H. Ghazzai, and Y. Massoud, ``PPO-based reinforcement learning for UAV navigation in urban environments,'' in \emph{Proc. IEEE 65th Int. Midwest Symp. Circuits Syst. (MWSCAS)}, 2022, doi: 10.1109/MWSCAS54063.2022.9859287.
+
+\bibitem{kutpanova2025} Z. Kutpanova, M. Kadhim, X. Zheng, and N. Zhakiyev, ``Multi-UAV path planning for multiple emergency payloads delivery in natural disaster scenarios,'' \emph{J. Electron. Sci. Technol.}, vol. 23, no. 2, 2025, Art. no. 100303.
+
+\bibitem{schulman2016} J. Schulman, P. Moritz, S. Levine, M. Jordan, and P. Abbeel, ``High-dimensional continuous control using generalized advantage estimation,'' in \emph{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2016.
+
+\bibitem{hochreiter1997} S. Hochreiter and J. Schmidhuber, ``Long short-term memory,'' \emph{Neural Comput.}, vol. 9, no. 8, pp. 1735--1780, 1997.
+
+\bibitem{altman1999} E. Altman, \emph{Constrained Markov Decision Processes}. Boca Raton, FL, USA: Chapman \& Hall/CRC, 1999.
+
+\bibitem{yoon2008} S. Yoon, A. Fern, R. Givan, and S. Kambhampati, ``Probabilistic planning via determinization in hindsight,'' in \emph{Proc. AAAI Conf. Artif. Intell.}, 2008, pp. 1010--1016.
+
+\bibitem{richardson1981} C. W. Richardson, ``Stochastic simulation of daily precipitation, temperature, and solar radiation,'' \emph{Water Resour. Res.}, vol. 17, no. 1, pp. 182--190, 1981.
+
+\bibitem{wilks1998} D. S. Wilks, ``Multisite generalization of a daily stochastic precipitation generation model,'' \emph{J. Hydrol.}, vol. 210, no. 1--4, pp. 178--191, 1998.
+
+\bibitem{bardossy1992} A. B\'{a}rdossy and E. J. Plate, ``Space-time model for daily rainfall using atmospheric circulation patterns,'' \emph{Water Resour. Res.}, vol. 28, no. 5, pp. 1247--1259, 1992.
+
+\bibitem{allcroft2003} D. J. Allcroft and C. A. Glasbey, ``A latent Gaussian Markov random-field model for spatiotemporal rainfall disaggregation,'' \emph{J. Roy. Statist. Soc. C}, vol. 52, no. 4, pp. 487--498, 2003.
+
+\bibitem{dottori2011} F. Dottori and E. Todini, ``Developments of a flood inundation model based on the cellular automata approach: Testing different methods to improve model performance,'' \emph{Phys. Chem. Earth}, vol. 36, no. 7--8, pp. 266--280, 2011.
+
+\bibitem{tellman2021} B. Tellman \emph{et al.}, ``Satellite imaging reveals increased proportion of population exposed to floods,'' \emph{Nature}, vol. 596, pp. 80--86, 2021.
+
+\bibitem{huang2022} S. Huang and S. Onta\~{n}\'{o}n, ``A closer look at invalid action masking in policy gradient algorithms,'' in \emph{Proc. Int. FLAIRS Conf.}, vol. 35, 2022.
+
+\bibitem{zippenfenig2023} P. Zippenfenig, ``Open-Meteo.com weather API,'' Zenodo, 2023, doi: 10.5281/zenodo.7970649.
+
+\bibitem{ljung1978} G. M. Ljung and G. E. P. Box, ``On a measure of lack of fit in time series models,'' \emph{Biometrika}, vol. 65, no. 2, pp. 297--303, 1978.
+
+\bibitem{hart1968} P. E. Hart, N. J. Nilsson, and B. Raphael, ``A formal basis for the heuristic determination of minimum cost paths,'' \emph{IEEE Trans. Syst. Sci. Cybern.}, vol. 4, no. 2, pp. 100--107, Jul. 1968.
+
+\bibitem{zadrozny2002} B. Zadrozny and C. Elkan, ``Transforming classifier scores into accurate multiclass probability estimates,'' in \emph{Proc. ACM SIGKDD Int. Conf. Knowl. Discov. Data Min.}, 2002, pp. 694--699.
+
+\bibitem{brier1950} G. W. Brier, ``Verification of forecasts expressed in terms of probability,'' \emph{Monthly Weather Rev.}, vol. 78, no. 1, pp. 1--3, 1950.
+
+\bibitem{wilson1927} E. B. Wilson, ``Probable inference, the law of succession, and statistical inference,'' \emph{J. Amer. Statist. Assoc.}, vol. 22, no. 158, pp. 209--212, 1927.
+
+\bibitem{efron1993} B. Efron and R. J. Tibshirani, \emph{An Introduction to the Bootstrap}. New York, NY, USA: Chapman \& Hall, 1993.
+
+\end{thebibliography}
+
+% TODO: replace with real author biographies. To add a photo (1 in x 1.25 in), use
+% \begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photo.png}}]{Name}
+\begin{IEEEbiography}{First Author} is with the Department of Computer Science and Engineering, University Name. Research interests include reinforcement learning, safe autonomy and unmanned aerial systems for disaster response.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}{Second Author} is with the Department of Computer Science and Engineering, University Name. Research interests include machine learning and robotics.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}{Third Author} is with the Department of Computer Science and Engineering, University Name. Research interests include planning under uncertainty and environmental modeling.
+\end{IEEEbiography}
+
+\EOD
+
+\end{document}

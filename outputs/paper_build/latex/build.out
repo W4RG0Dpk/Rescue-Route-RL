@@ -1,0 +1,116 @@
+note: "version 2" Tectonic command-line interface activated
+note: Running TeX ...
+warning: algorithmic.sty:11: 
+Invalid UTF-8 byte or sequence at line 11 replaced by U+FFFD.
+warning: access.tex:44: Overfull \hbox (9.2679pt too wide) in paragraph at lines 44--44
+warning: access.tex:44: Overfull \hbox (9.2679pt too wide) in paragraph at lines 44--44
+warning: access.tex:52: Underfull \vbox (badness 4518) has occurred while \output is active
+warning: access.tex:56: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:56: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:56: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:56: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:58: Underfull \hbox (badness 4608) in paragraph at lines 57--58
+warning: access.tex:97: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:97: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:97: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:111: Overfull \hbox (3.32645pt too wide) in paragraph at lines 102--111
+warning: access.tex:118: Underfull \vbox (badness 2644) has occurred while \output is active
+warning: access.tex:142: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:142: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:142: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:209: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:209: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:209: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:300: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:300: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:300: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:316: Underfull \vbox (badness 4726) has occurred while \output is active
+warning: access.tex:316: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:316: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:316: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:318: Underfull \vbox (badness 10000) has occurred while \output is active
+warning: access.tex:321: Underfull \vbox (badness 10000) has occurred while \output is active
+warning: access.tex:321: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:321: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:321: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:335: Underfull \hbox (badness 5771) in paragraph at lines 334--335
+warning: access.tex:385: Underfull \hbox (badness 1509) in paragraph at lines 384--385
+warning: access.tex:385: Underfull \hbox (badness 2418) in paragraph at lines 384--385
+warning: access.tex:438: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:438: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:438: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:452: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:452: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:452: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:492: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:492: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:492: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:511: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:511: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:511: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:546: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:546: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:546: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:551: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:551: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:551: Underfull \hbox (badness 10000) has occurred while \output is active
+note: Rerunning TeX because "access.aux" changed ...
+warning: algorithmic.sty:11: 
+Invalid UTF-8 byte or sequence at line 11 replaced by U+FFFD.
+warning: access.tex:44: Overfull \hbox (9.2679pt too wide) in paragraph at lines 44--44
+warning: access.tex:44: Overfull \hbox (9.2679pt too wide) in paragraph at lines 44--44
+warning: access.tex:52: Underfull \vbox (badness 4518) has occurred while \output is active
+warning: access.tex:56: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:56: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:56: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:56: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:58: Underfull \hbox (badness 4608) in paragraph at lines 57--58
+warning: access.tex:76: Underfull \hbox (badness 3758) in paragraph at lines 75--76
+warning: access.tex:97: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:97: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:97: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:111: Overfull \hbox (3.32645pt too wide) in paragraph at lines 102--111
+warning: access.tex:142: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:142: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:142: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:209: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:209: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:209: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:300: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:300: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:300: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:316: Underfull \vbox (badness 4726) has occurred while \output is active
+warning: access.tex:316: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:316: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:316: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:318: Underfull \vbox (badness 10000) has occurred while \output is active
+warning: access.tex:321: Underfull \vbox (badness 10000) has occurred while \output is active
+warning: access.tex:321: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:321: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:321: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:335: Underfull \hbox (badness 5771) in paragraph at lines 334--335
+warning: access.tex:385: Underfull \hbox (badness 2564) in paragraph at lines 384--385
+warning: access.tex:385: Underfull \hbox (badness 2418) in paragraph at lines 384--385
+warning: access.tex:438: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:438: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:438: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:452: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:452: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:452: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:492: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:492: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:492: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:511: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:511: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:511: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:546: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:546: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:546: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: access.tex:551: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:551: Overfull \hbox (505.12177pt too wide) has occurred while \output is active
+warning: access.tex:551: Underfull \hbox (badness 10000) has occurred while \output is active
+warning: warnings were issued by the TeX engine; use --print and/or --keep-logs for details.
+note: Running xdvipdfmx ...
+note: Writing `access.pdf` (570.9140625 KiB)
+note: Writing `access.log` (19.525390625 KiB)
+note: Skipped writing 1 intermediate files (use --keep-intermediates to keep them)

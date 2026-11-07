@@ -1,0 +1,59 @@
+{
+  "cnn": [
+    {
+      "round": 0,
+      "accuracy": 0.941333884759947,
+      "states": 82211
+    },
+    {
+      "round": 1,
+      "accuracy": 0.9751138890955842,
+      "student_success_during_collection": 0.43416666666666665,
+      "states": 120951
+    },
+    {
+      "round": 2,
+      "accuracy": 0.9839511388913051,
+      "student_success_during_collection": 0.36833333333333335,
+      "states": 160946
+    }
+  ],
+  "cnn_lstm": [
+    {
+      "round": 0,
+      "accuracy": 0.8584530089878859,
+      "states": 82211
+    },
+    {
+      "round": 1,
+      "accuracy": 0.9323386882634095,
+      "student_success_during_collection": 0.37916666666666665,
+      "states": 120766
+    },
+    {
+      "round": 2,
+      "accuracy": 0.9693328460530295,
+      "student_success_during_collection": 0.29083333333333333,
+      "states": 159029
+    }
+  ],
+  "mlp": [
+    {
+      "round": 0,
+      "accuracy": 0.8170682755349041,
+      "states": 82211
+    },
+    {
+      "round": 1,
+      "accuracy": 0.8571381568124239,
+      "student_success_during_collection": 0.37666666666666665,
+      "states": 121572
+    },
+    {
+      "round": 2,
+      "accuracy": 0.8962542270007804,
+      "student_success_during_collection": 0.32416666666666666,
+      "states": 161462
+    }
+  ]
+}

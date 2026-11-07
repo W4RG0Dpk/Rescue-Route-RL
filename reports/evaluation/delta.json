@@ -1,0 +1,105 @@
+{
+  "delta": 0.3,
+  "delta_abort": 0.85,
+  "objective": "maximise mean(success_and_recovery) subject to UAV-loss rate <= 0.08",
+  "validation_seeds": [
+    1000000,
+    1000015
+  ],
+  "profiles": [
+    "normal",
+    "low_battery",
+    "tight_deadline",
+    "strong_wind",
+    "dynamic_flood",
+    "fragile",
+    "wind_flood",
+    "low_battery_deadline",
+    "compound",
+    "all_combined",
+    "low_forecast_reliability"
+  ],
+  "table": [
+    {
+      "delta": 0.2,
+      "delta_abort": 0.5,
+      "success": 0.39204545454545453,
+      "success_and_recovery": 0.39204545454545453,
+      "uav_lost": 0.017045454545454544,
+      "safe_abort": 0.5625,
+      "objective": 0.39204545454545453
+    },
+    {
+      "delta": 0.2,
+      "delta_abort": 0.7,
+      "success": 0.4090909090909091,
+      "success_and_recovery": 0.4090909090909091,
+      "uav_lost": 0.022727272727272728,
+      "safe_abort": 0.5113636363636364,
+      "objective": 0.4090909090909091
+    },
+    {
+      "delta": 0.2,
+      "delta_abort": 0.85,
+      "success": 0.4147727272727273,
+      "success_and_recovery": 0.4147727272727273,
+      "uav_lost": 0.022727272727272728,
+      "safe_abort": 0.5056818181818182,
+      "objective": 0.4147727272727273
+    },
+    {
+      "delta": 0.3,
+      "delta_abort": 0.5,
+      "success": 0.4034090909090909,
+      "success_and_recovery": 0.4034090909090909,
+      "uav_lost": 0.017045454545454544,
+      "safe_abort": 0.5568181818181818,
+      "objective": 0.4034090909090909
+    },
+    {
+      "delta": 0.3,
+      "delta_abort": 0.7,
+      "success": 0.4147727272727273,
+      "success_and_recovery": 0.4147727272727273,
+      "uav_lost": 0.022727272727272728,
+      "safe_abort": 0.5170454545454546,
+      "objective": 0.4147727272727273
+    },
+    {
+      "delta": 0.3,
+      "delta_abort": 0.85,
+      "success": 0.42613636363636365,
+      "success_and_recovery": 0.42613636363636365,
+      "uav_lost": 0.022727272727272728,
+      "safe_abort": 0.5227272727272727,
+      "objective": 0.42613636363636365
+    },
+    {
+      "delta": 0.4,
+      "delta_abort": 0.5,
+      "success": 0.39204545454545453,
+      "success_and_recovery": 0.39204545454545453,
+      "uav_lost": 0.011363636363636364,
+      "safe_abort": 0.5681818181818182,
+      "objective": 0.39204545454545453
+    },
+    {
+      "delta": 0.4,
+      "delta_abort": 0.7,
+      "success": 0.4090909090909091,
+      "success_and_recovery": 0.4090909090909091,
+      "uav_lost": 0.022727272727272728,
+      "safe_abort": 0.5113636363636364,
+      "objective": 0.4090909090909091
+    },
+    {
+      "delta": 0.4,
+      "delta_abort": 0.85,
+      "success": 0.4147727272727273,
+      "success_and_recovery": 0.4147727272727273,
+      "uav_lost": 0.017045454545454544,
+      "safe_abort": 0.5113636363636364,
+      "objective": 0.4147727272727273
+    }
+  ]
+}

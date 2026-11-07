@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RescueRoute Mission Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" opacity=".35"/>
+        <path d="M16 6v20M6 16h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4" fill="currentColor"/>
+      </svg>
+      <div>
+        <div class="brand-name">RescueRoute <span>Mission Control</span></div>
+        <div class="brand-sub">Forecast-aware recoverability for emergency medical UAVs</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="replay">Mission</button>
+      <button class="tab" data-tab="compare">Compare</button>
+      <button class="tab" data-tab="bench">Benchmark</button>
+      <button class="tab" data-tab="weather">Weather validation</button>
+      <button class="tab" data-tab="about">How it works</button>
+    </nav>
+    <div class="mode-pill" id="modePill">offline replay</div>
+  </header>
+
+  <!-- ===================== MISSION ===================== -->
+  <main id="tab-replay" class="tabpane active">
+    <section class="scene-wrap">
+      <canvas id="scene"></canvas>
+      <div class="scene-overlay top-left glass" id="missionCard"></div>
+      <div class="scene-overlay top-right">
+        <div class="layer-toggles glass">
+          <label><input type="checkbox" id="tgForecast" checked> Forecast risk</label>
+          <label><input type="checkbox" id="tgFan" checked> Shield fan</label>
+          <label><input type="checkbox" id="tgTrail" checked> Trail</label>
+          <label><input type="checkbox" id="tgWeather" checked> Rain & wind</label>
+        </div>
+      </div>
+      <div class="scene-overlay bottom-left glass map-legend">
+        <span><i class="lg water"></i>Flood water</span>
+        <span><i class="lg risk"></i>Forecast flood risk</span>
+        <span><i class="lg nfz"></i>No-fly zone</span>
+        <span><i class="lg roof"></i>Rooftop landing</span>
+        <span><i class="lg base"></i>Base / helipad</span>
+        <span><i class="lg hosp"></i>Hospital (target)</span>
+      </div>
+      <div class="toasts" id="toasts"></div>
+      <div class="end-banner" id="endBanner"></div>
+      <div class="loading" id="loading"><div class="spinner"></div><div id="loadingText">Simulating…</div></div>
+    </section>
+
+    <aside class="side">
+      <div class="glass panel">
+        <div class="panel-title">Scenario</div>
+        <div class="row">
+          <label class="fld">Mission
+            <select id="selTrace"></select>
+          </label>
+        </div>
+        <div class="row live-only">
+          <label class="fld">Method<select id="selMethod"></select></label>
+          <label class="fld">Profile<select id="selProfile"></select></label>
+        </div>
+        <div class="row live-only">
+          <label class="fld">Seed<input id="inSeed" type="number" value="2000001" /></label>
+          <button class="btn primary" id="btnRun">Simulate ▶</button>
+        </div>
+        <div class="row live-only">
+          <button class="btn lucky" id="btnLucky" title="Pick a test mission this method delivered">✨ Pick a mission that works</button>
+        </div>
+        <div class="hint-text live-only">Stress profiles are hard on purpose: compound and all-combined missions are mostly impossible even for an oracle, and the shield's job there is to bring the UAV home safely.</div>
+      </div>
+
+      <div class="glass panel">
+        <div class="panel-title">Vehicle telemetry</div>
+        <div class="gauge" id="gBattery"><div class="g-label">Battery</div><div class="g-bar"><div class="g-fill"></div></div><div class="g-val"></div></div>
+        <div class="gauge" id="gDeadline"><div class="g-label">Deadline</div><div class="g-bar"><div class="g-fill"></div></div><div class="g-val"></div></div>
+        <div class="gauge" id="gPayload"><div class="g-label">Payload stability</div><div class="g-bar"><div class="g-fill"></div><div class="g-mark"></div></div><div class="g-val"></div></div>
+        <div class="gauge" id="gFlood"><div class="g-label">Airspace flooded</div><div class="g-bar"><div class="g-fill"></div></div><div class="g-val"></div></div>
+        <div class="weather-row">
+          <canvas id="compass" width="120" height="120"></canvas>
+          <div class="wx">
+            <div><span class="k">Wind</span> <span id="wxWind" class="v">–</span></div>
+            <div><span class="k">Gust</span> <span id="wxGust" class="v">–</span></div>
+            <div><span class="k">Rain</span> <span id="wxRain" class="v">–</span></div>
+            <div><span class="k">Forecast α</span> <span id="wxAlpha" class="v">–</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass panel">
+        <div class="panel-title">Safety layer <span class="hint" id="shieldMode"></span></div>
+        <div class="decision" id="decision"></div>
+        <div class="action-grid" id="actionGrid"></div>
+        <div class="legend-row">
+          <span><i class="sw" style="background:var(--safe)"></i>P<sub>unrec</sub> ≤ δ</span>
+          <span><i class="sw" style="background:var(--warn)"></i>risky</span>
+          <span><i class="sw" style="background:var(--danger)"></i>unrecoverable</span>
+          <span><i class="sw" style="background:var(--muted)"></i>immediately unsafe</span>
+        </div>
+      </div>
+    </aside>
+
+    <section class="transport glass">
+      <button class="icon-btn" id="btnPrev" title="Previous step (←)">⏮</button>
+      <button class="icon-btn big" id="btnPlay" title="Play / pause (space)">▶</button>
+      <button class="icon-btn" id="btnNext" title="Next step (→)">⏭</button>
+      <div class="timeline">
+        <canvas id="timeline"></canvas>
+        <input type="range" id="scrub" min="0" max="0" value="0" step="0.001" />
+      </div>
+      <div class="stepinfo" id="stepInfo">t = 0</div>
+      <select id="selSpeed" title="Playback speed">
+        <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
+      </select>
+    </section>
+  </main>
+
+  <!-- ===================== COMPARE ===================== -->
+  <main id="tab-compare" class="tabpane">
+    <div class="compare-head glass">
+      <label class="fld">Mission<select id="cmpMission"></select></label>
+      <label class="fld">Left<select id="cmpLeft"></select></label>
+      <label class="fld">Right<select id="cmpRight"></select></label>
+      <button class="icon-btn big" id="cmpPlay">▶</button>
+      <input type="range" id="cmpScrub" min="0" max="0" value="0" step="0.001" />
+      <div class="stepinfo" id="cmpInfo">t = 0</div>
+    </div>
+    <div class="compare-grid">
+      <div class="cmp-cell"><canvas id="cmpA"></canvas><div class="cmp-label glass" id="cmpLabelA"></div></div>
+      <div class="cmp-cell"><canvas id="cmpB"></canvas><div class="cmp-label glass" id="cmpLabelB"></div></div>
+    </div>
+  </main>
+
+  <!-- ===================== BENCHMARK ===================== -->
+  <main id="tab-bench" class="tabpane scroll">
+    <div class="page">
+      <h1>Benchmark results</h1>
+      <p class="lede" id="benchLede"></p>
+      <div class="kpis" id="benchKpis"></div>
+      <div class="card glass"><h2>Mission success by stress profile</h2><div id="benchProfile" class="chart"></div></div>
+      <div class="card glass"><h2>How missions end</h2><div id="benchOutcomes" class="chart"></div></div>
+      <div class="card glass"><h2>All methods</h2><div id="benchTable" class="table-wrap"></div></div>
+    </div>
+  </main>
+
+  <!-- ===================== WEATHER ===================== -->
+  <main id="tab-weather" class="tabpane scroll">
+    <div class="page">
+      <h1>Empirical weather validation</h1>
+      <p class="lede" id="wxLede"></p>
+      <div class="kpis" id="wxKpis"></div>
+      <div class="card glass"><h2>Rainfall</h2><div class="figs" id="wxRainFigs"></div><div id="wxRainTable" class="table-wrap"></div></div>
+      <div class="card glass"><h2>Wind</h2><div class="figs" id="wxWindFigs"></div><div id="wxWindTable" class="table-wrap"></div></div>
+    </div>
+  </main>
+
+  <!-- ===================== ABOUT ===================== -->
+  <main id="tab-about" class="tabpane scroll">
+    <div class="page prose">
+      <h1>How the recoverability shield works</h1>
+      <ol class="pipeline">
+        <li><b>Observe.</b> The UAV sees a 17×17 local map (7 channels: obstacles, no-fly zones, rooftops, its own position, the hospital, the current flood and the forecast flood probability) plus a 15-value state vector.</li>
+        <li><b>Propose.</b> A PPO policy (CNN encoder + LSTM memory) outputs a probability for each of 9 actions.</li>
+        <li><b>Imagine.</b> For every candidate action, the evaluator samples K plausible futures <i>conditioned on the forecast</i>: monotone flood masks with exactly the forecast's marginal probabilities, plus stochastic wind. It never sees the simulator's true future.</li>
+        <li><b>Plan in each future.</b> An exact time-expanded minimum-energy search checks whether the UAV can still deliver before the deadline, re-stabilise the payload, and then reach a dry base or rooftop with its battery reserve intact.</li>
+        <li><b>Gate.</b> <code>P_unrec(s,a) = mean_k 1[M_rec^k &lt; 0]</code>. Actions with P_unrec ≤ δ are safe; the policy's favourite safe action is executed.</li>
+        <li><b>Fall back.</b> If no action meets δ, the least-risk action is taken. If even that has P_unrec ≥ ½ (confirmed with a larger sample), the UAV returns to base or lands on the nearest dry rooftop.</li>
+      </ol>
+      <p class="muted">The flood model is a synthetic stochastic cellular automaton, not a hydrological model. The rainfall and wind processes were checked against ERA5 data (see the Weather tab).</p>
+    </div>
+  </main>
+
+  <script src="data/demo_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "source": "Open-Meteo Historical Weather API",
+  "url": "https://archive-api.open-meteo.com/v1/archive",
+  "model": "ERA5 (ECMWF / Copernicus C3S reanalysis)",
+  "license": "CC BY 4.0 (Open-Meteo); ERA5 under Copernicus licence - attribution required",
+  "location": {
+    "key": "mumbai",
+    "name": "Mumbai, Maharashtra",
+    "latitude": 19.076,
+    "longitude": 72.8777,
+    "note": "Coastal megacity with recurrent monsoon urban flooding (e.g. 26 July 2005)."
+  },
+  "grid_cell_returned": {
+    "latitude": 19.0,
+    "longitude": 73.0,
+    "elevation_m": 6.0
+  },
+  "start": "2021-01-01",
+  "end": "2023-12-31",
+  "timezone": "GMT",
+  "units": {
+    "time": "iso8601",
+    "precipitation": "mm",
+    "rain": "mm",
+    "wind_speed_10m": "m/s",
+    "wind_direction_10m": "\u00b0",
+    "wind_gusts_10m": "m/s"
+  },
+  "variables": [
+    "precipitation",
+    "rain",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m"
+  ],
+  "downloaded_utc": "2026-11-01T10:14:52.484522+00:00",
+  "rows": 26280
+}

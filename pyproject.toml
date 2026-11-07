@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rescue-route"
+version = "1.0.0"
+description = "Forecast-aware recoverability for emergency medical UAV navigation in stochastic urban floods"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24", "scipy>=1.10", "pandas>=2.0", "matplotlib>=3.7", "pillow>=9.0",
+  "gymnasium>=0.29", "torch>=2.0", "statsmodels>=0.14", "requests>=2.28", "flask>=2.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
